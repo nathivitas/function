@@ -1,0 +1,36 @@
+import logging
+import azure.functions as func
+import csv
+import os
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
+import tempfile
+
+def main(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info('Python HTTP trigger function processed a request.')
+    
+    # get the connection string for the storage account
+    conn_str = os.environ['AzureWebJobsStorage']
+    blob_service_client = BlobServiceClient.from_connection_string(conn_str)
+    
+    # get the input file from the request
+    input_file = req.files['file']
+    file_name = input_file.filename
+
+    # create a temporary file to store the binary data
+    with tempfile.TemporaryFile() as tmp:
+        tmp.write(input_file.read())
+        tmp.seek(0)
+        
+        # convert the binary data to a CSV file
+        csv_data = []
+        for row in tmp:
+            csv_data.append(row.decode('utf-8').strip())
+        
+        # upload the CSV file to the storage account
+        container_name = os.environ['m365users']
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=file_name.replace('.bin', '.csv'))
+        blob_client.upload_blob('\n'.join(csv_data), overwrite=True)
+        
+        logging.info('Uploaded CSV file to storage account.')
+    
+    return func.HttpResponse("File uploaded successfully.")
